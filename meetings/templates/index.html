@@ -1,0 +1,168 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html lang="en">
+<head>
+    <title>Appointments</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap includes javascript and css (must follow jquery) -->
+    <link rel="stylesheet"
+          href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <script
+            src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js">
+    </script>
+    <link rel="stylesheet" type="text/css"
+          href="//cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css"
+    />
+
+
+    <link rel="stylesheet" type="text/css"
+          href="/static/css/busy.css"
+    />
+
+    <!-- jquery from a content distribution network; probably cached -->
+    <script type="text/javascript"
+            src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js">
+    </script>
+
+    <!-- Ideally the rest of our javascript dependencies would be
+         bundled and minified with 'browserify', but I've found that
+         it difficult to handle browserify dependencies for class
+         projects.  So, we'll pick up moment and a date range picker
+         from CDNs instead.
+    -->
+
+    <script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+
+    <script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
+    <link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css"/>
+
+
+</head>
+
+<body>
+<div class="container">
+
+    <h1>Busy times</h1>
+
+    <!--
+      -- If there are any warnings or other messages from a prior action,
+      -- they appear above the rest of the content, just until the next
+      -- action.
+      -->
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class=flashes>
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <h2>Date & Time range</h2>
+    <form action="/setrange" method="post">
+        <input type="text" name="daterange" size="12"
+                {% if session.daterange is defined %}
+               value="{{ session.daterange }}"
+                {% endif %}
+               class="pull-down"
+               style="background: #fff; cursor: pointer; padding: 5px 10px;
+     border: 1px solid #ccc; width: 22em">
+        <script type="text/javascript">
+            $(function () {
+                $('input[name="daterange"]').daterangepicker(
+                    {
+                        timePicker: true,
+                        timePicker24Hour: true,
+                        timePickerIncrement: 30,
+                        locale: {
+                            format: 'MM/DD/YYYY H:mm'
+                        },
+                        ranges: {
+                            'Today': [moment(), moment()],
+                            'Tomorrow': [moment().add(1, 'days'),
+                                moment().add(1, 'days')],
+                            'This week': [moment(), moment().endOf('week')],
+                            'Next week': [moment().add(7, 'days').startOf('week'),
+                                moment().add(7, 'days').endOf('week')],
+                            'This month': [moment(), moment().endOf('month')],
+                            'Within two weeks': [moment(), moment().add(15, 'days')]
+                        }
+                    }
+                );
+            });
+        </script>
+        <br/><input type="submit" value="Choose"/>
+
+    </form>
+
+    <!--
+    Show the calendar list (if we have it).  This will need to be turned into
+    a form from which calendars can be picked. Up to three entries are
+    shown in each row (but the order is across then down; I would
+    prefer down then across). 
+    -->
+    <div>
+    <strong>Select calendars:</strong>
+    <form id="select" action="/_select" method="POST">
+        {% if g.calendars is defined %}
+            <div class="row">
+                {% for cal in g.calendars if cal.selected %}
+                    <div class="col-md-4">
+                        <input type="checkbox" name="token" id="token" value={{ cal.id }}>
+                        {{ cal.summary }}
+                    </div>
+                    {% if loop.index is divisibleby 3 %}
+                        </div>
+                        <div class="row">
+                    {% endif %}
+                {% endfor %}
+                </div>
+        {% endif %}
+        <br/>
+        <input type="submit" value="submit selected calendar" id="selectedCalendarButton"/>
+    </form>
+    </div>        
+
+    <div>
+        <form id ="free" action="/_free" method="POST">
+        {% if g.events is defined %}
+        <div>
+            <br><strong> Your busy appointments below: (from left to right, top to bottom)</strong>
+            <br><strong> I am really not good at formatting in HTML.</strong>
+            <br><strong> Please notice that my codes do sorting for different calendars but I don't have a nice way to split different calendar</strong>
+                {% for each in g.events %}
+                    {% for event in each %}
+                        <div class="col-md-4">
+                            <input type="checkbox" name="mark" id="mark" value={{ event.id }}>
+                            start time:
+                            {{ event.start_time }}<br/>
+                            end time:
+                            {{ event.end_time }} <br/>
+                            Summary:
+                            {{ event.summary }} <br/>
+                            Description:
+                            {{ event.description }} <br/>
+
+                        </div>
+                    {% endfor %}
+                    <br>
+                {% endfor %}
+        {% endif %}
+        <input type="submit" value="mark events as free events" id="freeCalendarButton"/>
+        </form>
+    </div>
+
+    <div>
+        {% if g.free_events is defined %}
+            {% for event in g.free_events %}
+                <strong>{{ event.status }} </strong> + {{ event.start_time }} + {{ event.end_time }} + {{ event.summary }} + {{ event.description}} <br>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+
+</div>  <!-- container (for bootstrap) -->
+</body>
+</html>
