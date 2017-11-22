@@ -32,14 +32,7 @@ class CalendarEvent(object):
         self.description = description
         self.id = id
         self.status = status
-
-    def __repr__(self):
-        return "start:" + self.start + \
-                "end: " + self.end + \
-                "date: " + self.date + \
-                "status: " + self.status + \
-                "summary: " + self.summary + \
-                "description: " + self.description
+        self.stupid = None
 
     def get_start_time(self):
         """
@@ -111,6 +104,29 @@ class CalendarEvent(object):
         event["status"] = self.status
         return event
 
+    def intersect(self, other, desc=""):
+        """Return an appointment representing the period in
+        common between this appointment and another.
+        Requires self.overlaps(other).
+        
+		Arguments: 
+			other:  Another Appt
+			desc:  (optional) description text for this appointment. 
+
+		Returns: 
+			An appointment representing the time period in common
+			between self and other.   Description of returned Appt 
+			is copied from this (self), unless a non-null string is 
+			provided as desc. 
+        """
+
+        # We know the day must be the same. 
+        # Find overlap of times: 
+        #   Later of two begin times, earlier of two end times
+        new_start = max(self.start, other.start)
+        new_end = min(self.end, other.end)
+        return CalendarEvent(new_start, new_end, self.date)
+
     def time_union(self, other):
         """
         get the time union of two event if they are overlapped
@@ -122,37 +138,23 @@ class CalendarEvent(object):
         new_start = min(self.start, other.start)
         new_end = max(self.end, other.end)
         return CalendarEvent(new_start, new_end, self.date)
-
-    def time_list(self, other):
-        """
-        get the time list of two event if they are not overlapped
-        Args:
-            other: another event object
-        Return:
-            return a new time list which 
-        """
-        time_list = []
-        time_list.append(self)
-        time_list.append(other)
-        return time_list
-
-    def free_time(self, busy_time):
-        """
-        The crucial method is for computing free time. Use a whole day object
-        to  substract busy time object.
-        I hardcode here because I don't have time to give an elegant solution
-        Args:
-            busy_time: a event object, indicating busy block
-        Return:
-            free_list: a list of free time, indicating free blocks
-        """
-        free_list = []
-        if (busy_time.start >= self.start and busy_time.end < self.end):
-            free_list.append(CalendarEvent(busy_time.end, self.end, self.date))
-        elif (busy_time.end >= self.end and busy_time.start < self.start):
-             free_list.append(CalendarEvent(busy_time.end, self.end, self.date))
-        elif (busy_time.start >= self.start and busy_time.end >= self.end:
-            pass                                                                                                
+    
+    # def free_time(self, busy_time_list):
+    #     """
+    #     The crucial method is for computing free time. Use a whole day object
+    #     to  substract busy time object.
+    #     I hardcode here because I don't have time to give an elegant solution
+    #     Args:
+    #         busy_time_list: a list of event objects, indicating busy block
+    #     Return:
+    #         free_list: a list of free time, indicating free blocks
+    #     """
+    #     free_list = []
+    #     free_list.append(self)
+    #     for free in free_list:
+    #         for busy in busy_time_list:
+    #             if free.overlap(busy):
+    #                 free_list.append                                                                           
 
 
 
@@ -170,7 +172,7 @@ class Agenda(object):
 
     def __init__(self):
         """An empty agenda."""
-        self.appts = [ ]
+        self.appts = []
 
     def append(self,appt):
         """Add an Appt to the agenda."""
@@ -190,11 +192,8 @@ class Agenda(object):
            desc:  If provided, this string becomes the title of
                 all the appointments in the result.
         """
-        default_desc = (desc == "")
         result = Agenda()
         for thisappt in self.appts:
-            if default_desc: 
-                desc = thisappt.desc
             for otherappt in other.appts:
                 if thisappt.overlaps(otherappt):
                     result.append(thisappt.intersect(otherappt,desc))
@@ -212,7 +211,7 @@ class Agenda(object):
         if len(self.appts) == 0:
             return
 
-        ordering = lambda ap: ap.begin
+        ordering = lambda ap: ap.start
         self.appts.sort(key=ordering)
 
         normalized = [ ]
@@ -265,24 +264,23 @@ class Agenda(object):
         """
         copy = self.normalized()
         comp = Agenda()
-        day = freeblock.begin.date()
-        desc = freeblock.desc
-        cur_time = freeblock.begin
+        day = freeblock.date
+        cur_time = freeblock.start
         for appt in copy.appts:
             if appt < freeblock:
                 continue
             if appt > freeblock:
                 if cur_time < freeblock.end:
-                    comp.append(Appt(day,cur_time.time(),freeblock.end.time(), desc))
+                    comp.append(CalendarEvent(cur_time, freeblock.end, freeblock.date, status=FREE))
                     cur_time = freeblock.end
                 break
             if cur_time < appt.begin:
                 # print("Creating free time from", cur_time, "to", appt.begin)
-                comp.append(Appt(day, cur_time.time(), appt.begin.time(), desc))
+                comp.append(CalendarEvent(cur_time, freeblock.start, freeblock.date, status=FREE))
             cur_time = max(appt.end,cur_time)
         if cur_time < freeblock.end:
             # print("Creating final free time from", cur_time, "to", freeblock.end)
-            comp.append(Appt(day, cur_time.time(), freeblock.end.time(), desc))
+            comp.append(CalendarEvent(cur_time, freeblock.end, freeblock.date, status=FREE))
         return comp
 
 
@@ -309,7 +307,7 @@ class Agenda(object):
         for i in range(len(self.appts)):
             mine = self.appts[i]
             theirs = other.appts[i]
-            if not (mine.begin == theirs.begin and
+            if not (mine.start == theirs.start and
                     mine.end == theirs.end):
                 return False
         return True

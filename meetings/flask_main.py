@@ -266,10 +266,12 @@ def select():
     for token in tokens:
         new_event_list = []
         for event in list_events(gcal_service, token):
-            new_event_list.append(event.translator())
+            new_event_list.append(event.translator()) # save translated events
         events_list_bycalendar.append(new_event_list)
+
     app.logger.debug(events_list_bycalendar)
     flask.g.events = events_list_bycalendar
+    flask.session["events"] = events_list_bycalendar
     return render_template('index.html')
 
 
@@ -291,16 +293,17 @@ def free():
     free_events_list = []
 
     # get all selected events into a single list
-    for calendar in flask.g.events:
+    for calendar in flask.session["events"]:
         free_events_list += calendar
-
+    app.logger.debug(free_events_list)
+    
     # we remove some events which are not in the right meeting time also some events which are marked as free time
     for mark in marks: # I should design one better search algorithms here
         for event in free_events_list:
-            if event.get_id() == mark:
+            if event["id"] == mark:
                 free_events_list.remove(event)
 
-    free_events_list.sort(key=lambda e: e.get_start_time())
+    free_events_list.sort(key=lambda e: e.start)
 
     # My idea is pretty straightforward but takes long time
     # traverse the date range users picked. For each day, we find the free time
@@ -313,24 +316,24 @@ def free():
     arrow_date = arrow.get(flask.session['real_start_time'])
     for i in range(days):
         # get the whole day object for each day
+        free_list = []
         new_arrow_date = arrow_date.shift(days=+i)
         date = new_arrow_date.isoformat().split("T")[0]
-        whole_day = CalendarEvent.CalendarEvent(start_time, end_time, date)
-
+        whole_day = CalendarEvent.CalendarEvent(start_time, end_time, date, status="FREE")
+    
         # grab busy events in the same date
         single_day_events = CalendarEvent.Agenda()
         for event in free_events_list:
-            if event.get_date() != whole_day.get_date():
-                break
-            single_day_events.append(event)
-        # union busy events
+            if event.get_date() == whole_day.get_date():
+                single_day_events.append(event)
+        app.logger.debug(single_day_events)
 
+        # get free time
+        free_list = single_day_events.complement(whole_day)
+        app.logger.debug(free_list)
+        free_events_list += free_list
 
-        # get the free time list for each single day
-        free_time = whole_day.free_time(busy_time_list)
-        free_events_list += free_time
-
-    free_events_list.sort(key=lambda e: e.get_start_time())
+    free_events_list.sort(key=lambda e: e.start)
     free_translated_list = []
     for event in free_events_list:
         free_translated_list.append(event.translator())
@@ -439,8 +442,10 @@ def diff_days(date1, date2):
     """
     return the days between two dates
     """
-    d1 = datetime.strptime(date1, "%m/%d/%Y")
-    d2 = datetime.strptime(date2, "%m/%d/%Y")
+    date_1 = date2.split("T")[0]
+    date_2 = date2.split("T")[0]
+    d1 = datetime.strptime(date_1, "%Y/%m/%d")
+    d2 = datetime.strptime(date_2, "%Y/%m/%d")
     return abs((d2 - d1).days)
 ####
 #
@@ -549,11 +554,16 @@ def event_filter(event_start, event_end):
     return:
         True if the event is in the right time otherwise false
     """
-    e_start = arrow.get(event_start)
-    e_end = arrow.get(event_end)
-    start = arrow.get(flask.session['real_start_time'])
-    end = arrow.get(flask.session['real_end_time'])
-    return (start < e_end < end) or (start < e_start < end)
+    app.logger.debug(event_start)
+    app.logger.debug(event_end)
+    app.logger.debug(flask.session['real_start_time'])
+    app.logger.debug(flask.session['real_end_time'])
+    e_start_date, e_start_time = event_start.split("T")
+    e_end_date, e_end_time = event_end.split("T")
+    start_date, start_time = flask.session['real_start_time'].split("T")
+    end_date, end_time = flask.session['real_end_time'].split("T")
+    return ((start_date <= e_start_date <= e_end_date <= end_date) and 
+           (start_time <= e_start_time <= e_end_time <= end_time))
 
 def cal_sort_key(cal):
     """
