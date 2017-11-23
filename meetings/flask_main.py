@@ -21,7 +21,7 @@ import httplib2  # used in oauth2 flow
 from apiclient import discovery
 
 # import Data structure
-from Model import CalendarEvent
+from Model import Agenda
 
 ###
 # Globals
