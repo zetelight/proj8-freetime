@@ -5,7 +5,8 @@ Note: This test only works for my own calendar which means it may not work for o
 
 """
 
-from flask_main import *
+from meetings import flask_main
+
 SCOPES = 'https://www.googleapis.com/auth/calendar.readonly'
 CLIENT_SECRET_FILE = CONFIG.GOOGLE_KEY_FILE  # You'll need this
 credentials = valid_credentials()
@@ -31,16 +32,13 @@ def test_event_filter():
     event_list = []
     for event in events:
         if event_filter(event["start"]["dateTime"],
-                        event["end"]["dateTime"],
-                        "2017-11-06T22:00:00-08:00",
-                        "2017-11-16T00:00:00-08:00"):
+                        event["end"]["dateTime"]):
             # In my case, all events should be passed by this filter
             event_list.append(event)
     assert len(event_list) == 3
 
 
 def test_calendar_list():
-
     assert calendars[0]["id"] == "test4CIS322XC@gmail.com"
     assert calendars[0]["summary"] == "test4CIS322XC@gmail.com"
     assert calendars[0]["description"] == "(no description)"
@@ -51,7 +49,8 @@ def test_calendar_list():
 
     assert calendars[0]["id"] == "en.usa#holiday@group.v.calendar.google.com"
     assert calendars[0]["summary"] == "Holidays in United States"
-    assert calendars[0]["description"] == "(no description)""
+    assert calendars[0]["description"] == "(no description)"
+
 
 def test_event_list():
     # since the events is sorted already by start_time, so we can check their contents one by one

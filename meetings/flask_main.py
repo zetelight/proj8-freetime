@@ -33,6 +33,7 @@ if __name__ == "__main__":
 else:
     CONFIG = config.configuration(proxied=True)
 
+global object_event_list
 app = flask.Flask(__name__)
 app.debug = CONFIG.DEBUG
 app.logger.setLevel(logging.DEBUG)
@@ -65,7 +66,6 @@ def choose():
     # to pull it back here because the redirect has to be a
     # 'return'
     app.logger.debug("Checking credentials for Google calendar access")
-    # gcal_service = retrieve_gcal_service()
     credentials = valid_credentials()
     if not credentials:
         app.logger.debug("Redirecting to authorization")
@@ -74,6 +74,7 @@ def choose():
     app.logger.debug("Returned from get_gcal_service")
     flask.g.calendars = list_calendars(gcal_service)
     return render_template('index.html')
+
 
 ####
 #
@@ -86,7 +87,7 @@ def choose():
 #  Protocol for use ON EACH REQUEST:
 #     First, check for valid credentials
 #     If we don't have valid credentials
-#         Get credentials (jump to the oauth2 protocol)
+#         Get credentials (jump to the oauth2 protocl)
 #         (redirects back to /choose, this time with credentials)
 #     If we do have valid credentials
 #         Get the service object
@@ -97,25 +98,11 @@ def choose():
 #  we can't stash one in a cookie.  Instead, on each request we
 #  get a fresh service object from our credentials, which are
 #  serializable.
-#
 #  Note that after authorization we always redirect to /choose;
 #  If this is unsatisfactory, we'll need a session variable to use
 #  as a 'continuation' or 'return address' to use instead.
 #
 ####
-
-
-def retrieve_gcal_service():
-    """
-    Re-use the codes to retreve google calendar service.
-    return the google calendar serbice
-    """
-    credentials = valid_credentials()
-    if not credentials:
-        app.logger.debug("Redirecting to authorization")
-        return flask.redirect(flask.url_for('oauth2callback'))
-    return get_gcal_service(credentials)
-
 
 def valid_credentials():
     """
@@ -252,13 +239,11 @@ def select():
     """
     According to marked checkbox, re-direct to index.html
     """
-    app.logger.debug("Checking credentials for selecting")
     credentials = valid_credentials()
     if not credentials:
         app.logger.debug("Redirecting to authorization")
         return flask.redirect(flask.url_for('oauth2callback'))
     gcal_service = get_gcal_service(credentials)
-    # gcal_service = retrieve_gcal_service()
     app.logger.debug("Select calendars")
     tokens = flask.request.form.getlist("token")
     app.logger.debug("The token: {}".format(tokens))
@@ -266,9 +251,10 @@ def select():
     for token in tokens:
         new_event_list = []
         for event in list_events(gcal_service, token):
-            new_event_list.append(event.translator())
+            new_event_list.append(event)
         events_list_bycalendar.append(new_event_list)
     app.logger.debug(events_list_bycalendar)
+    flask.session["translated_events"] = events_list_bycalendar
     flask.g.events = events_list_bycalendar
     return render_template('index.html')
 
@@ -279,65 +265,64 @@ def free():
     According to marked checkbox in busy assignment, list free time for users
     """
     app.logger.debug("Checking credentials for searching free events")
-    credentials = valid_credentials()
-    if not credentials:
-        app.logger.debug("Redirecting to authorization")
-        return flask.redirect(flask.url_for('oauth2callback'))
-    gcal_service = get_gcal_service(credentials)
-    # gcal_service = retrieve_gcal_service()
+
     app.logger.debug("Search free time")
     marks = flask.request.form.getlist("mark")
     app.logger.debug("The mark: {}".format(marks))
+    free_naive_events_list = []
     free_events_list = []
+    busy_lists = flask.session["translated_events"]
 
     # get all selected events into a single list
-    for calendar in flask.g.events:
+    for calendar in busy_lists:
         free_events_list += calendar
-
+    app.logger.debug(free_events_list)
+    # translate these events back to object
+    for event in free_events_list:
+        free_naive_events_list.append(translator_dictToObject(event))
+    app.logger.debug(free_naive_events_list)
     # we remove some events which are not in the right meeting time also some events which are marked as free time
-    for mark in marks: # I should design one better search algorithms here
-        for event in free_events_list:
+    for mark in marks:
+        for event in free_naive_events_list:
             if event.get_id() == mark:
-                free_events_list.remove(event)
-
-    free_events_list.sort(key=lambda e: e.get_start_time())
+                free_naive_events_list.remove(event)
 
     # My idea is pretty straightforward but takes long time
     # traverse the date range users picked. For each day, we find the free time
     # then append the free time into free_event_list
-    
-    days = diff_days(flask.session['begin_date'], flask.session['end_date'])
+    start_date, start_time = flask.session['real_start_time'].split("T")
+    end_date, end_time = flask.session['real_end_time'].split("T")
+    days = diff_days(start_date, end_date)
+    app.logger.debug(days)
     # Reminder: ISO format "2017/01/01T08:00:00-8:00"
-    start_time = flask.session['start_time'].split("T")[1]
-    end_time = flask.session['end_time'].split("T")[1]
     arrow_date = arrow.get(flask.session['real_start_time'])
     for i in range(days):
         # get the whole day object for each day
         new_arrow_date = arrow_date.shift(days=+i)
         date = new_arrow_date.isoformat().split("T")[0]
-        whole_day = CalendarEvent.CalendarEvent(start_time, end_time, date)
-
+        whole_day = CalendarEvent.CalendarEvent(start_time, end_time, date, status="FREE")
+        app.logger.debug(whole_day)
         # grab busy events in the same date
         single_day_events = CalendarEvent.Agenda()
-        for event in free_events_list:
+        for event in free_naive_events_list:
             if event.get_date() != whole_day.get_date():
-                break
-            single_day_events.append(event)
-        # union busy events
+                single_day_events.append(event)
 
+        app.logger.debug(single_day_events)
 
         # get the free time list for each single day
-        free_time = whole_day.free_time(busy_time_list)
-        free_events_list += free_time
-
-    free_events_list.sort(key=lambda e: e.get_start_time())
+        free_time = single_day_events.complement(whole_day)
+        app.logger.debug(free_time)
+        free_naive_events_list += free_time.toList()
+    app.logger.debug(free_naive_events_list)
+    free_naive_events_list.sort(key=lambda e: e.get_start_time())
     free_translated_list = []
-    for event in free_events_list:
-        free_translated_list.append(event.translator())
-    app.logger.debug(free_events_list)
+    for event in free_naive_events_list:
+        free_translated_list.append(event.translator_classToDict())
     app.logger.debug(free_translated_list)
     flask.g.free_events = free_translated_list
     return render_template('index.html')
+
 
 ####
 #
@@ -435,13 +420,16 @@ def next_day(isotext):
     as_arrow = arrow.get(isotext)
     return as_arrow.replace(days=+1).isoformat()
 
+
 def diff_days(date1, date2):
     """
     return the days between two dates
     """
-    d1 = datetime.strptime(date1, "%m/%d/%Y")
-    d2 = datetime.strptime(date2, "%m/%d/%Y")
+    d1 = datetime.strptime(date1, "%Y-%m-%d")
+    d2 = datetime.strptime(date2, "%Y-%m-%d")
     return abs((d2 - d1).days)
+
+
 ####
 #
 #  Functions (NOT pages) that return some information
@@ -473,7 +461,6 @@ def list_calendars(service):
         primary = ("primary" in cal) and cal["primary"]
 
         result.append(
-
             {"kind": kind,
              "id": id,
              "summary": summary,
@@ -496,12 +483,9 @@ def list_events(service, calendar_id):
         events, a sorted list of event according to start time
     """
     app.logger.debug("Begin to retrieve events of calendar")
-    event_list = service.events().list(
-        calendarId=calendar_id).execute()["items"]
-    app.logger.debug(event_list)
+    event_list = service.events().list(calendarId=calendar_id).execute()["items"]
     events = []
     for event in event_list:
-        app.logger.debug(event)
 
         # Deal with some non-standard event entries
         if event["status"] == "cancelled":
@@ -521,21 +505,24 @@ def list_events(service, calendar_id):
             end_time = event["end"]["dateTime"]
         except KeyError:
             continue
-
+        
+        try:
+            summary = event["summary"]
+        except KeyError:
+            continue
         id = event["id"]
-        summary = event["summary"]
-        app.logger.debug("event starts at {}, ends at {}. The range starts at {}, ends at {}".
-                            format(start_time, end_time, flask.session['real_start_time'], flask.session['real_end_time']))
         app.logger.debug(event_filter(start_time, end_time))
         if event_filter(start_time, end_time):
             # start_time sample: 2017/01/01T14:00:00-8:00
-            s_time = start_time.split("T")[1]
-            e_time = end_time.split("T")[1]
-            date = start_time.split("T")[0]
-            e = CalendarEvent.CalendarEvent(s_time, e_time, date, summary, desc, id)
-            events.append(e)
-    app.logger.debug(events)
-    events.sort(key=lambda e: e.get_start_time())
+            events.append(
+                {"id": id,
+                 "summary": summary,
+                 "description": desc,
+                 "start_time": start_time,
+                 "end_time": end_time,
+                 }
+            )
+    events.sort(key=lambda e: e["start_time"])
     app.logger.debug(events)
     return events
 
@@ -549,11 +536,31 @@ def event_filter(event_start, event_end):
     return:
         True if the event is in the right time otherwise false
     """
-    e_start = arrow.get(event_start)
-    e_end = arrow.get(event_end)
-    start = arrow.get(flask.session['real_start_time'])
-    end = arrow.get(flask.session['real_end_time'])
-    return (start < e_end < end) or (start < e_start < end)
+    e_start_date, e_start_time = event_start.split("T")
+    e_end_date, e_end_time = event_end.split("T")
+    start_date, start_time = flask.session['real_start_time'].split("T")
+    end_date, end_time = flask.session['real_end_time'].split("T")
+    return ((start_date <= e_start_date <= e_end_date <= end_date) and
+            (start_time <= e_start_time <= e_end_time <= end_time))
+
+
+def translator_dictToObject(event):
+    """
+    translate events whose type is dictionary in python to type "Event"
+    Args:
+        event: a dictionary, which contains infos of an event
+    return:
+        event_obj: an Event object
+    """
+    s_time = event["start_time"].split("T")[1]
+    e_time = event["end_time"].split("T")[1]
+    date = event["start_time"].split("T")[0]
+    id = event["id"]
+    summary = event["summary"]
+    desc = event["description"]
+    event_obj = CalendarEvent.CalendarEvent(s_time, e_time, date, summary, desc, id)
+    return event_obj
+
 
 def cal_sort_key(cal):
     """

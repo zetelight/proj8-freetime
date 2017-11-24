@@ -157,7 +157,7 @@
     <div>
         {% if g.free_events is defined %}
             {% for event in g.free_events %}
-                <strong>{{ event.status }} </strong> + {{ event.start_time }} + {{ event.end_time }} + {{ event.summary }} + {{ event.description}} <br>
+                <strong>{{ event.status }} </strong> start: {{ event.start_time }} end: {{ event.end_time }} summary: {{ event.summary }} description: {{ event.description}} <br>
             {% endfor %}
         {% endif %}
     </div>

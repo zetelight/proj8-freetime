@@ -1,5 +1,5 @@
-### Still under construction. Plase go back later!
-proj8 - Freetime
+
+## proj8 - Freetime
 Snarf appointment data from a selection of a user's Google calendars with busy/free time options available
 - Orignal author: Michal Young
 - Author: Xin(Adam) Chen

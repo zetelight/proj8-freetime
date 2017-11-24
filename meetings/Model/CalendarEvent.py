@@ -9,7 +9,7 @@ FREE = "FREE"
 
 
 class CalendarEvent(object):
-    def __init__(self, start_time, end_time, date, summary = None, description = None, id = None, status=BUSY):
+    def __init__(self, start_time, end_time, date, summary=None, description=None, id=None, status=BUSY):
         """
         Initialization method for CalendarEvent
         Args:
@@ -33,14 +33,6 @@ class CalendarEvent(object):
         self.id = id
         self.status = status
 
-    def __repr__(self):
-        return "start:" + self.start + \
-                "end: " + self.end + \
-                "date: " + self.date + \
-                "status: " + self.status + \
-                "summary: " + self.summary + \
-                "description: " + self.description
-
     def get_start_time(self):
         """
         get the start time to sort
@@ -58,7 +50,7 @@ class CalendarEvent(object):
         get the end time to sort
         """
         return self.date
-    
+
     def get_id(self):
         """
         get the id
@@ -71,7 +63,7 @@ class CalendarEvent(object):
         """
         iso_time = self.date + "T" + time
         return iso_time
-    
+
     def __lt__(self, other):
         """
         compare time.
@@ -86,7 +78,7 @@ class CalendarEvent(object):
         Return:
             True if and only if the other is done before the time this event begins
         """
-        return other < self
+        return self.end > other.start
 
     def overlap(self, other):
         """
@@ -94,7 +86,7 @@ class CalendarEvent(object):
         """
         return not (self < other or other < self)
 
-    def translator(self):
+    def translator_classToDict(self):
         """
         translate event class object to a list of dictionaries
         Args:
@@ -111,7 +103,7 @@ class CalendarEvent(object):
         event["status"] = self.status
         return event
 
-    def time_union(self, other):
+    def union(self, other):
         """
         get the time union of two event if they are overlapped
         Args:
@@ -122,41 +114,6 @@ class CalendarEvent(object):
         new_start = min(self.start, other.start)
         new_end = max(self.end, other.end)
         return CalendarEvent(new_start, new_end, self.date)
-
-    def time_list(self, other):
-        """
-        get the time list of two event if they are not overlapped
-        Args:
-            other: another event object
-        Return:
-            return a new time list which 
-        """
-        time_list = []
-        time_list.append(self)
-        time_list.append(other)
-        return time_list
-
-    def free_time(self, busy_time):
-        """
-        The crucial method is for computing free time. Use a whole day object
-        to  substract busy time object.
-        I hardcode here because I don't have time to give an elegant solution
-        Args:
-            busy_time: a event object, indicating busy block
-        Return:
-            free_list: a list of free time, indicating free blocks
-        """
-        free_list = []
-        if (busy_time.start >= self.start and busy_time.end < self.end):
-            free_list.append(CalendarEvent(busy_time.end, self.end, self.date))
-        elif (busy_time.end >= self.end and busy_time.start < self.start):
-             free_list.append(CalendarEvent(busy_time.end, self.end, self.date))
-        elif (busy_time.start >= self.start and busy_time.end >= self.end:
-            pass                                                                                                
-
-
-
-
 
 
 # Class Agenda is from agenda.py whose author is Professor Young
@@ -170,13 +127,19 @@ class Agenda(object):
 
     def __init__(self):
         """An empty agenda."""
-        self.appts = [ ]
+        self.appts = []
 
-    def append(self,appt):
+    def append(self, appt):
         """Add an Appt to the agenda."""
         self.appts.append(appt)
 
-    def intersect(self,other,desc=""): 
+    def toList(self):
+        """
+        return a list rather than Agenda
+        """
+        return self.appts
+
+    def intersect(self, other, desc=""):
         """Return a new agenda containing appointments
         that are overlaps between appointments in this agenda
         and appointments in the other agenda.
@@ -190,15 +153,12 @@ class Agenda(object):
            desc:  If provided, this string becomes the title of
                 all the appointments in the result.
         """
-        default_desc = (desc == "")
         result = Agenda()
         for thisappt in self.appts:
-            if default_desc: 
-                desc = thisappt.desc
             for otherappt in other.appts:
                 if thisappt.overlaps(otherappt):
-                    result.append(thisappt.intersect(otherappt,desc))
-        
+                    result.append(thisappt.intersect(otherappt))
+
         return result
 
     def normalize(self):
@@ -212,25 +172,24 @@ class Agenda(object):
         if len(self.appts) == 0:
             return
 
-        ordering = lambda ap: ap.begin
+        ordering = lambda ap: ap.start
         self.appts.sort(key=ordering)
 
-        normalized = [ ]
-        # print("Starting normalization")
-        cur = self.appts[0]  
-        for appt in self.appts[1:]:
-            if appt > cur:
-                # Not overlapping
-                # print("Gap - emitting ", cur)
-                normalized.append(cur)
-                cur = appt
-            else:
-                # Overlapping
-                # print("Merging ", cur, "\n"+
-                #      "with    ", appt)
-                cur = cur.union(appt)
-                # print("New cur: ", cur)
-        # print("Last appt: ", cur)
+        normalized = []
+        cur = self.appts[0]
+        if len(self.appts) > 1:
+            for appt in self.appts[1:]:
+                if appt > cur:
+                    # Not overlapping
+                    # print("Gap - emitting ", cur)
+                    normalized.append(cur)
+                    cur = appt
+                else:
+                    # Overlapping
+                    # print("Merging ", cur, "\n"+
+                    #      "with    ", appt)
+                    cur = cur.union(appt)
+                    # print("New cur: ", cur)
         normalized.append(cur)
         self.appts = normalized
 
@@ -244,7 +203,7 @@ class Agenda(object):
         copy.appts = self.appts
         copy.normalize()
         return copy
-        
+
     def complement(self, freeblock):
         """Produce the complement of an agenda
         within the span of a timeblock represented by 
@@ -265,27 +224,22 @@ class Agenda(object):
         """
         copy = self.normalized()
         comp = Agenda()
-        day = freeblock.begin.date()
-        desc = freeblock.desc
-        cur_time = freeblock.begin
+        day = freeblock.date
+        cur_time = freeblock.start
         for appt in copy.appts:
             if appt < freeblock:
                 continue
             if appt > freeblock:
                 if cur_time < freeblock.end:
-                    comp.append(Appt(day,cur_time.time(),freeblock.end.time(), desc))
+                    comp.append(CalendarEvent(cur_time, freeblock.end, day, status=FREE))
                     cur_time = freeblock.end
                 break
-            if cur_time < appt.begin:
-                # print("Creating free time from", cur_time, "to", appt.begin)
-                comp.append(Appt(day, cur_time.time(), appt.begin.time(), desc))
-            cur_time = max(appt.end,cur_time)
+            if cur_time < appt.start:
+                comp.append(CalendarEvent(cur_time, appt.start, day, status=FREE))
+            cur_time = max(appt.end, cur_time)
         if cur_time < freeblock.end:
-            # print("Creating final free time from", cur_time, "to", freeblock.end)
-            comp.append(Appt(day, cur_time.time(), freeblock.end.time(), desc))
+            comp.append(CalendarEvent(cur_time, freeblock.end, day, status=FREE))
         return comp
-
-
 
     def __len__(self):
         """Number of appointments, callable as built-in len() function"""
@@ -295,21 +249,14 @@ class Agenda(object):
         """An iterator through the appointments in this agenda."""
         return self.appts.__iter__()
 
-    def __str__(self):
-        """String representation of a whole agenda"""
-        rep = ""
-        for appt in self.appts:
-            rep += str(appt) + "\n"
-        return rep[:-1]
-
-    def __eq__(self,other):
+    def __eq__(self, other):
         """Equality, ignoring descriptions --- just equal blocks of time"""
         if len(self.appts) != len(other.appts):
             return False
         for i in range(len(self.appts)):
             mine = self.appts[i]
             theirs = other.appts[i]
-            if not (mine.begin == theirs.begin and
-                    mine.end == theirs.end):
+            if not (mine.start == theirs.start and
+                            mine.end == theirs.end):
                 return False
         return True
