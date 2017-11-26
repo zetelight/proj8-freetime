@@ -119,6 +119,7 @@ class CalendarEvent(object):
 # Class Agenda is from agenda.py whose author is Professor Young
 # I tried to make my own agenda but it really takes time
 # so I decieded to use professor's one but revised some codes to complete my project
+# Link here: https://piazza.com/class_profile/get_resource/ihjisylll7y4az/ihjiszn8gh24ch from the prevsious piazza 322 "resource" section.
 
 class Agenda(object):
     """An Agenda is essentially a list of appointments,
