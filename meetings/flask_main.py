@@ -33,7 +33,6 @@ if __name__ == "__main__":
 else:
     CONFIG = config.configuration(proxied=True)
 
-global object_event_list
 app = flask.Flask(__name__)
 app.debug = CONFIG.DEBUG
 app.logger.setLevel(logging.DEBUG)
