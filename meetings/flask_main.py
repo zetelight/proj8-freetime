@@ -286,9 +286,18 @@ def free():
             if event.get_id() == mark:
                 free_naive_events_list.remove(event)
 
+    free_naive_appt_list = []
+    # translate CalendarEvent to appt
+    for event in free_naive_events_list:
+        free_naive_appt_list.append(event.translator_toAppt())
+        app.logger.debug(event)
     # My idea is pretty straightforward but takes long time
     # traverse the date range users picked. For each day, we find the free time
     # then append the free time into free_event_list
+
+    # update: 12/06/2017, since my class is not suitable for professor's method
+    # I have to make an interface between two class.
+
     start_date, start_time = flask.session['real_start_time'].split("T")
     end_date, end_time = flask.session['real_end_time'].split("T")
     days = diff_days(start_date, end_date)
@@ -300,23 +309,26 @@ def free():
         new_arrow_date = arrow_date.shift(days=+i)
         date = new_arrow_date.isoformat().split("T")[0]
         whole_day = CalendarEvent.CalendarEvent(start_time, end_time, date, status="FREE")
-        app.logger.debug(whole_day)
+        whole_day_appt = whole_day.translator_toAppt()
+
         # grab busy events in the same date
         single_day_events = CalendarEvent.Agenda()
         for event in free_naive_events_list:
-            if event.get_date() != whole_day.get_date():
-                single_day_events.append(event)
+            if event.get_date() == whole_day.get_date():
+                appt = event.translator_toAppt()
+                single_day_events.append(appt)
 
         app.logger.debug(single_day_events)
 
         # get the free time list for each single day
-        free_time = single_day_events.complement(whole_day)
+        free_time = single_day_events.complement(whole_day_appt)
         app.logger.debug(free_time)
-        free_naive_events_list += free_time.toList()
-    app.logger.debug(free_naive_events_list)
-    free_naive_events_list.sort(key=lambda e: e.get_start_time())
+        for event in free_time:
+            free_naive_appt_list.append(event)
+    app.logger.debug(free_naive_appt_list)
+
     free_translated_list = []
-    for event in free_naive_events_list:
+    for event in free_naive_appt_list:
         free_translated_list.append(event.translator_classToDict())
     app.logger.debug(free_translated_list)
     flask.g.free_events = free_translated_list

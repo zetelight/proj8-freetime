@@ -140,8 +140,6 @@
                             {{ event.start_time }}<br/>
                             end time:
                             {{ event.end_time }} <br/>
-                            Summary:
-                            {{ event.summary }} <br/>
                             Description:
                             {{ event.description }} <br/>
 
@@ -157,7 +155,7 @@
     <div>
         {% if g.free_events is defined %}
             {% for event in g.free_events %}
-                <strong>{{ event.status }} </strong> start: {{ event.start_time }} end: {{ event.end_time }} summary: {{ event.summary }} description: {{ event.description}} <br>
+                <strong>{{ event.status }} </strong> start: {{ event.start_time }} end: {{ event.end_time }} description: {{ event.description}} <br>
             {% endfor %}
         {% endif %}
     </div>
